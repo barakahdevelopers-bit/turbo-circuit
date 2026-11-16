@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#ff6a2b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -109,6 +110,7 @@ input[type=text]:focus{outline:none;border-color:var(--acc)}
   <p class="sub">Who's racing? Pick your profile, or make a new one with your own username and picture.</p>
   <div id="profList" class="profgrid"></div>
   <div class="row"><button class="primary" id="newProf">+ New profile</button><button id="guestBtn">Play as guest</button></div>
+  <div id="gWrap" style="display:none;margin-top:16px"><div class="sub" style="margin:0 0 8px">Or sign in with Google</div><div id="gBtn"></div></div>
   <div class="card" id="profForm" style="display:none;margin-top:18px">
    <h2 id="formTitle">New profile</h2>
    <div class="lbl">Username</div>
@@ -1454,7 +1456,8 @@ const getProfiles=()=>store.get('tc_profiles',[]);
 const saveProfiles=a=>store.set('tc_profiles',a);
 function paintAvatar(el,p,size){
   el.className='av'; el.style.width=el.style.height=size+'px'; el.innerHTML='';
-  if(p&&p.img){ el.style.background='url('+p.img+') center/cover'; }
+  const im=p&&(p.img||p.picUrl);
+  if(im){ el.style.background='url("'+im+'") center/cover'; }
   else { el.style.background=(p&&p.color)||'#444'; const sp=document.createElement('span'); sp.textContent=(p&&p.emoji)||'👤'; sp.style.fontSize=Math.round(size*.52)+'px'; el.appendChild(sp); }
 }
 function renderProfiles(){
@@ -1494,14 +1497,14 @@ function buildForm(){
   $('cancelProf').onclick=()=>{ $('profForm').style.display='none'; };
   $('saveProf').onclick=saveProfile; $('pName').onkeydown=e=>{ if(e.key==='Enter') saveProfile(); };
   $('guestBtn').onclick=()=>loginAs(null);
-  $('profChip').onclick=()=>{ renderProfiles(); $('profForm').style.display='none'; show('login'); };
+  $('profChip').onclick=()=>{ try{ google.accounts.id.disableAutoSelect(); }catch(e){} renderProfiles(); $('profForm').style.display='none'; show('login'); };
 }
 function saveProfile(){
   const name=$('pName').value.trim(), all=getProfiles();
   if(!/^[A-Za-z0-9_\- ]{3,16}$/.test(name)){ $('nameErr').textContent='Username must be 3–16 letters, numbers, spaces, _ or -.'; return; }
   if(all.some(p=>p.name.toLowerCase()===name.toLowerCase()&&(!editing||p.id!==editing.id))){ $('nameErr').textContent='That username is already taken on this device.'; return; }
   let p;
-  if(editing){ p=all.find(x=>x.id===editing.id); p.name=name; p.img=formState.img; p.emoji=formState.emoji; p.color=formState.color; }
+  if(editing){ p=all.find(x=>x.id===editing.id); p.name=name; p.img=formState.img; if(formState.img) p.picUrl=null; p.emoji=formState.emoji; p.color=formState.color; }
   else { p={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name,img:formState.img,emoji:formState.emoji,color:formState.color}; all.push(p); }
   saveProfiles(all); $('profForm').style.display='none'; loginAs(p);
 }
@@ -1511,6 +1514,29 @@ function deleteProfile(p){
   const pre='p_'+p.id+'_'; Object.keys(MEM).filter(k=>k.startsWith(pre)).forEach(k=>delete MEM[k]); try{ Object.keys(localStorage).filter(k=>k.startsWith(pre)).forEach(k=>localStorage.removeItem(k)); }catch(e){}
   if(store.get('tc_last',null)===p.id) store.set('tc_last',null);
   renderProfiles();
+}
+
+/* ---------------- GOOGLE SIGN-IN ----------------
+   Paste your OAuth Client ID here (see GOOGLE-SETUP.txt). While it is empty the Google button stays hidden. */
+const GOOGLE_CLIENT_ID='';
+let _gTries=0;
+function initGoogle(){
+  if(!GOOGLE_CLIENT_ID) return;
+  if(!(window.google&&google.accounts&&google.accounts.id)){ if(++_gTries<40) setTimeout(initGoogle,500); return; }
+  google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:onGoogle,auto_select:false});
+  $('gWrap').style.display='block';
+  google.accounts.id.renderButton($('gBtn'),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with',width:260});
+}
+function decodeJwt(t){ const p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(decodeURIComponent(atob(p).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''))); }
+function onGoogle(resp){
+  try{
+    const d=decodeJwt(resp.credential), id='g'+d.sub, all=getProfiles();
+    const nm=String(d.given_name||d.name||'Player').replace(/[^A-Za-z0-9_\- ]/g,'').trim().slice(0,16)||'Player';
+    let p=all.find(x=>x.id===id);
+    if(!p){ p={id,name:nm,img:null,picUrl:d.picture||null,emoji:'🏎️',color:'#1e66f5',google:true}; all.push(p); }
+    else if(!p.img&&d.picture) p.picUrl=d.picture;
+    saveProfiles(all); loginAs(p);
+  }catch(e){ alert('Google sign-in failed. Please try again.'); }
 }
 function loginAs(p){
   PROFILE=p; PFX=p?('p_'+p.id+'_'):'guest_'; store.set('tc_last',p?p.id:null);
@@ -1529,7 +1555,7 @@ $('helpBack').onclick=()=>{ show(helpPrev); if(helpPrev==='race'&&g&&g.phase==='
 $('p_help').onclick=()=>{ $('pauseM').classList.remove('on'); openHelp(); };
 addEventListener('keydown',e=>{ if(e.code==='KeyH'&&!$('race').classList.contains('on')&&!$('login').classList.contains('on')&&!(document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName))){ if($('helpPage').classList.contains('on')) $('helpBack').click(); else openHelp(); } });
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-buildGarage(); refreshGarage(); buildForm(); renderProfiles();
+buildGarage(); refreshGarage(); buildForm(); renderProfiles(); initGoogle();
 requestAnimationFrame(previewLoop); requestAnimationFrame(frame);
 </script>
 </body>

@@ -1,0 +1,30 @@
+GOOGLE SIGN-IN SETUP (about 10 minutes, free)
+=============================================
+The game already has the Google button built in. It stays hidden until you give it a
+Google "Client ID". Only you can create one, because it belongs to your Google account.
+
+1. Go to https://console.cloud.google.com and sign in with your Google account.
+2. Create a new project (top bar -> New Project -> name it "Turbo Circuit").
+3. Menu -> APIs & Services -> OAuth consent screen
+     - User type: External  -> Create
+     - App name: Turbo Circuit, your support email, developer contact email -> Save
+     - You can leave everything else. (While the app is in "Testing" mode only
+       emails you add under "Test users" can sign in. Click "Publish app" to let
+       anyone sign in; for just name/email/picture Google does not need a review.)
+4. Menu -> APIs & Services -> Credentials -> Create credentials -> OAuth client ID
+     - Application type: Web application
+     - Authorized JavaScript origins -> Add URI:
+           https://barakahdevelopers-bit.github.io
+       (add http://localhost:8766 too if you want to test on your computer)
+     - Create. Copy the Client ID. It looks like:
+           123456789-abcdefg.apps.googleusercontent.com
+5. Give me the Client ID (it is not a secret) and I will put it in the game and publish it,
+   or paste it yourself into index.html on the line:
+           const GOOGLE_CLIENT_ID='';
+
+Notes
+ - Google sign-in only works on the website (https), not when index.html is opened as a file.
+ - The game reads the player's first name and profile picture from Google. It does not keep
+   their email or send anything to a server.
+ - Saves (garage, best times) are still stored in that browser on that device. Signing in
+   on another computer starts a fresh profile, because there is no game server yet.

@@ -1,5 +1,5 @@
 /* Turbo Circuit service worker: cache the game and everything it downloads, so it opens fast and works offline after the first visit. */
-const CACHE = 'turbo-circuit-v3';
+const CACHE = 'turbo-circuit-v4';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./','./index.html','./manifest.webmanifest','./icon.svg'])).then(() => self.skipWaiting()));
 });
