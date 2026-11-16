@@ -45,6 +45,19 @@ button.sel,.filebtn{}
 kbd{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;background:var(--panel2);font-size:12px;font-weight:700}
 .ktab{width:100%;border-collapse:collapse}.ktab td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:middle}.ktab td:first-child{white-space:nowrap;width:46%}
 #helpPage p{margin:.5em 0;line-height:1.5;color:#cfd5e6}
+input[type=text]{width:100%;max-width:340px;font:inherit;font-size:16px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input[type=text]:focus{outline:none;border-color:var(--acc)}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 0 0 2px #ffffff30;overflow:hidden}
+.chip{display:flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;max-width:210px}
+.chip #chipName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin:18px 0}
+.prof{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 10px 12px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center}
+.prof:hover{border-color:var(--acc);transform:translateY(-2px)}
+.prof.last{border-color:var(--acc2)}
+.prof .nm{margin-top:10px;font-weight:700;word-break:break-all}
+.prof .acts{margin-top:8px;display:flex;gap:6px}
+.prof .acts button{padding:3px 9px;font-size:12px}
+.emo{width:42px;height:42px;font-size:22px;padding:0}
 #prev{width:100%;height:auto;background:radial-gradient(circle at 50% 40%,#2a3147,#141824);border-radius:12px;display:block}
 .bar{height:8px;border-radius:5px;background:var(--panel2);overflow:hidden}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
@@ -89,10 +102,34 @@ kbd{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border
 </head>
 <body>
 
+<!-- LOGIN -->
+<section id="login" class="screen on">
+ <div class="wrap" style="max-width:760px">
+  <h1 style="font-size:44px">TURBO <span>CIRCUIT</span></h1>
+  <p class="sub">Who's racing? Pick your profile, or make a new one with your own username and picture.</p>
+  <div id="profList" class="profgrid"></div>
+  <div class="row"><button class="primary" id="newProf">+ New profile</button><button id="guestBtn">Play as guest</button></div>
+  <div class="card" id="profForm" style="display:none;margin-top:18px">
+   <h2 id="formTitle">New profile</h2>
+   <div class="lbl">Username</div>
+   <input type="text" id="pName" maxlength="16" placeholder="3–16 letters or numbers" autocomplete="off">
+   <div id="nameErr" style="color:#ff6b5e;font-size:13px;min-height:18px;margin-top:4px"></div>
+   <div class="lbl">Profile picture</div>
+   <div class="row" style="gap:16px;align-items:center"><div id="avPrev"></div>
+     <div><label class="filebtn">Upload your own picture<input type="file" id="avFile" accept="image/*" hidden></label>
+     <div style="font-size:12px;color:var(--mute);margin-top:6px">…or pick an icon and colour below. Pictures stay on this device.</div></div></div>
+   <div class="row" id="emoRow" style="margin-top:12px"></div>
+   <div class="row" id="colRow" style="margin-top:10px"></div>
+   <div class="row" style="margin-top:18px"><button class="primary" id="saveProf">Save &amp; play</button><button id="cancelProf">Cancel</button></div>
+  </div>
+  <p class="sub" style="margin-top:22px;font-size:12px">Profiles live in this browser on this device (no password, nothing is uploaded). Each profile keeps its own garage setup and best lap times.</p>
+ </div>
+</section>
+
 <!-- GARAGE -->
-<section id="garage" class="screen on">
+<section id="garage" class="screen">
  <div class="wrap">
-  <div class="top"><h1>TURBO <span>CIRCUIT</span></h1><div class="row"><button id="toHelp">How to play</button><button class="primary" id="toTracks">Choose a track →</button></div></div>
+  <div class="top"><h1>TURBO <span>CIRCUIT</span></h1><div class="row"><button id="profChip" class="chip" title="Switch profile"><span id="chipAv"></span><span id="chipName"></span></button><button id="toHelp">How to play</button><button class="primary" id="toTracks">Choose a track →</button></div></div>
   <p class="sub">Build your car in the garage, then pick one of 5 tracks. Solo time trial — 3 laps, you vs. the clock.</p>
   <div class="grid">
    <div class="card">
@@ -191,6 +228,7 @@ kbd{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border
  <div id="vig"></div>
  <div id="hud">
   <div class="box">
+   <div class="mini" id="h_user" style="color:#ffc233;font-weight:700"></div>
    <div class="mini" id="h_lap">LAP 1 / 3</div>
    <div class="time" id="h_time">0:00.000</div>
    <div class="mini" id="h_best">Best lap: --</div>
@@ -211,9 +249,12 @@ kbd{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border
 'use strict';
 const LAPS = 3;
 const $ = id => document.getElementById(id);
+let PFX='';
+const GLOBALKEYS=['tc_profiles','tc_last'];
+const MEM={};
 const store = {
-  get(k, d){ try{ const v = localStorage.getItem(k); return v===null? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  get(k, d){ const key=(GLOBALKEYS.includes(k)?'':PFX)+k; try{ const v=localStorage.getItem(key); if(v!==null) return JSON.parse(v); }catch(e){ if(key in MEM) return JSON.parse(MEM[key]); } return d; },
+  set(k, v){ const key=(GLOBALKEYS.includes(k)?'':PFX)+k; try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){ MEM[key]=JSON.stringify(v); } }
 };
 const fmt = t => { if(t==null) return '--'; const m=Math.floor(t/60), s=t-m*60; return m+':'+(s<10?'0':'')+s.toFixed(3); };
 
@@ -250,7 +291,8 @@ const CARS = {
 };
 
 const STRIPES = {none:'None', center:'Center', double:'Double', side:'Sides'};
-let car = Object.assign({model:'f458',tire:'street',rimFin:'gloss',rimSet:false,body:'sport',color:'#e53935',stripe:'center',stripeColor:'#f5f5f5',spoiler:false,num:7,bal:50}, store.get('tc_car', {}));
+const CAR_DEFAULT={model:'f458',tire:'street',rimFin:'gloss',rimSet:false,body:'sport',color:'#e53935',stripe:'center',stripeColor:'#f5f5f5',spoiler:false,num:7,bal:50};
+let car = Object.assign({}, CAR_DEFAULT);
 
 function carStats(c){
   const E=CARS[c.model]||CARS.f458, p=BODIES[c.body].m, k=c.bal/100, Tm=TIRES[c.tire]||TIRES.street;   // k=1 -> all speed
@@ -1404,6 +1446,80 @@ function frame(ts){
 }
 
 /* ---------------- BOOT ---------------- */
+/* ---------------- PROFILES / LOGIN ---------------- */
+let PROFILE=null, editing=null, formState={img:null,emoji:'🏎️',color:'#e53935'};
+const AV_EMOJI=['🏎️','🏁','🚗','🔥','⚡','🦊','🐺','🦅','🐉','👑','🚀','🎯'];
+const AV_COLORS=['#e53935','#ff8f00','#fdd835','#43a047','#00acc1','#1e66f5','#8e24aa','#ec407a'];
+const getProfiles=()=>store.get('tc_profiles',[]);
+const saveProfiles=a=>store.set('tc_profiles',a);
+function paintAvatar(el,p,size){
+  el.className='av'; el.style.width=el.style.height=size+'px'; el.innerHTML='';
+  if(p&&p.img){ el.style.background='url('+p.img+') center/cover'; }
+  else { el.style.background=(p&&p.color)||'#444'; const sp=document.createElement('span'); sp.textContent=(p&&p.emoji)||'👤'; sp.style.fontSize=Math.round(size*.52)+'px'; el.appendChild(sp); }
+}
+function renderProfiles(){
+  const list=$('profList'); list.innerHTML=''; const last=store.get('tc_last',null);
+  getProfiles().forEach(p=>{
+    const d=document.createElement('div'); d.className='prof'+(p.id===last?' last':''); d.tabIndex=0;
+    const av=document.createElement('div'); paintAvatar(av,p,76); d.appendChild(av);
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=p.name; d.appendChild(nm);
+    const acts=document.createElement('div'); acts.className='acts';
+    const ed=document.createElement('button'); ed.textContent='Edit'; ed.onclick=e=>{ e.stopPropagation(); openForm(p); };
+    const del=document.createElement('button'); del.textContent='Delete'; del.onclick=e=>{ e.stopPropagation(); deleteProfile(p); };
+    acts.appendChild(ed); acts.appendChild(del); d.appendChild(acts);
+    d.onclick=()=>loginAs(p); d.onkeydown=e=>{ if(e.key==='Enter') loginAs(p); };
+    list.appendChild(d);
+  });
+  if(!getProfiles().length){ const e=document.createElement('div'); e.style.cssText='color:var(--mute);grid-column:1/-1'; e.textContent='No profiles yet. Make one to save your garage and best times.'; list.appendChild(e); }
+}
+function openForm(p){
+  editing=p||null; formState={img:p&&p.img||null,emoji:p&&p.emoji||AV_EMOJI[Math.floor(Math.random()*AV_EMOJI.length)],color:p&&p.color||AV_COLORS[Math.floor(Math.random()*AV_COLORS.length)]};
+  $('formTitle').textContent=p?'Edit profile':'New profile'; $('pName').value=p?p.name:''; $('nameErr').textContent='';
+  $('profForm').style.display='block'; refreshForm(); $('pName').focus();
+}
+function refreshForm(){
+  paintAvatar($('avPrev'),formState,84);
+  $('emoRow').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',!formState.img&&b.textContent===formState.emoji));
+  $('colRow').querySelectorAll('.sw').forEach(b=>b.classList.toggle('sel',!formState.img&&b.dataset.c===formState.color));
+}
+function buildForm(){
+  const er=$('emoRow'); er.innerHTML=''; AV_EMOJI.forEach(e=>{ const b=document.createElement('button'); b.className='emo'; b.textContent=e; b.onclick=()=>{ formState.img=null; formState.emoji=e; refreshForm(); }; er.appendChild(b); });
+  const cr=$('colRow'); cr.innerHTML=''; AV_COLORS.forEach(c=>{ const b=document.createElement('button'); b.className='sw'; b.style.background=c; b.dataset.c=c; b.onclick=()=>{ formState.img=null; formState.color=c; refreshForm(); }; cr.appendChild(b); });
+  $('avFile').onchange=e=>{ const fl=e.target.files[0]; e.target.value=''; if(!fl) return;
+    if(!/^image\//.test(fl.type)){ $('nameErr').textContent='Please choose an image file.'; return; }
+    const rd=new FileReader(); rd.onload=()=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d'), m=Math.min(im.width,im.height), sx=(im.width-m)/2, sy=(im.height-m)/2; x.drawImage(im,sx,sy,m,m,0,0,128,128);
+        formState.img=c.toDataURL('image/jpeg',.85); refreshForm(); }; im.onerror=()=>{ $('nameErr').textContent='Could not read that picture.'; }; im.src=rd.result; };
+    rd.readAsDataURL(fl); };
+  $('newProf').onclick=()=>openForm(null);
+  $('cancelProf').onclick=()=>{ $('profForm').style.display='none'; };
+  $('saveProf').onclick=saveProfile; $('pName').onkeydown=e=>{ if(e.key==='Enter') saveProfile(); };
+  $('guestBtn').onclick=()=>loginAs(null);
+  $('profChip').onclick=()=>{ renderProfiles(); $('profForm').style.display='none'; show('login'); };
+}
+function saveProfile(){
+  const name=$('pName').value.trim(), all=getProfiles();
+  if(!/^[A-Za-z0-9_\- ]{3,16}$/.test(name)){ $('nameErr').textContent='Username must be 3–16 letters, numbers, spaces, _ or -.'; return; }
+  if(all.some(p=>p.name.toLowerCase()===name.toLowerCase()&&(!editing||p.id!==editing.id))){ $('nameErr').textContent='That username is already taken on this device.'; return; }
+  let p;
+  if(editing){ p=all.find(x=>x.id===editing.id); p.name=name; p.img=formState.img; p.emoji=formState.emoji; p.color=formState.color; }
+  else { p={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name,img:formState.img,emoji:formState.emoji,color:formState.color}; all.push(p); }
+  saveProfiles(all); $('profForm').style.display='none'; loginAs(p);
+}
+function deleteProfile(p){
+  if(!confirm('Delete profile "'+p.name+'" and its saved garage and lap times?')) return;
+  saveProfiles(getProfiles().filter(x=>x.id!==p.id));
+  const pre='p_'+p.id+'_'; Object.keys(MEM).filter(k=>k.startsWith(pre)).forEach(k=>delete MEM[k]); try{ Object.keys(localStorage).filter(k=>k.startsWith(pre)).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  if(store.get('tc_last',null)===p.id) store.set('tc_last',null);
+  renderProfiles();
+}
+function loginAs(p){
+  PROFILE=p; PFX=p?('p_'+p.id+'_'):'guest_'; store.set('tc_last',p?p.id:null);
+  car=Object.assign({},CAR_DEFAULT,store.get('tc_car',{})); if(!CARS[car.model]) car.model='f458';
+  const nm=p?p.name:'Guest';
+  paintAvatar($('chipAv'),p||{emoji:'👤',color:'#4a5168'},30); $('chipName').textContent=nm; $('h_user').textContent='👤 '+nm;
+  refreshGarage(); show('garage');
+}
+
 $('toTracks').onclick=()=>{ buildTrackList(); show('trackSel'); };
 $('toGarage').onclick=()=>show('garage');
 let helpPrev='garage';
@@ -1411,9 +1527,9 @@ function openHelp(){ const on=document.querySelector('.screen.on'); if(on&&on.id
 $('toHelp').onclick=openHelp; $('toHelp2').onclick=openHelp;
 $('helpBack').onclick=()=>{ show(helpPrev); if(helpPrev==='race'&&g&&g.phase==='paused') $('pauseM').classList.add('on'); };
 $('p_help').onclick=()=>{ $('pauseM').classList.remove('on'); openHelp(); };
-addEventListener('keydown',e=>{ if(e.code==='KeyH'&&!$('race').classList.contains('on')){ if($('helpPage').classList.contains('on')) $('helpBack').click(); else openHelp(); } });
+addEventListener('keydown',e=>{ if(e.code==='KeyH'&&!$('race').classList.contains('on')&&!$('login').classList.contains('on')&&!(document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName))){ if($('helpPage').classList.contains('on')) $('helpBack').click(); else openHelp(); } });
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-buildGarage(); refreshGarage();
+buildGarage(); refreshGarage(); buildForm(); renderProfiles();
 requestAnimationFrame(previewLoop); requestAnimationFrame(frame);
 </script>
 </body>
